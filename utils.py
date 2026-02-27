@@ -30,10 +30,7 @@ from timm.scheduler.cosine_lr import CosineLRScheduler
 from timm.utils import NativeScaler, ModelEma
 from torcheval.metrics import MulticlassAccuracy
 
-from rich.progress import (
-    Progress, SpinnerColumn, BarColumn, TextColumn,
-    MofNCompleteColumn, TimeRemainingColumn, TransferSpeedColumn,
-)
+from tqdm import tqdm
 from rich.console import Console
 from rich.table import Table
 
@@ -41,25 +38,24 @@ from rich.table import Table
 # ── 量子化レンジ固定（I-ViT / model_utils.py 由来） ───────────────────────────────────
 def freeze_model(model: nn.Module):
     """
-    QuantAct の活性化レンジを固定する（再帰的）。
-    running_stat 属性をもつモジュールを QuantAct とみなしてダックタイピングで判定する。
+    QuantAct の活性化レンジを固定する。
+    model.modules() で全サブモジュールをフラットに列挙し、
+    running_stat 属性をもつモジュール（QuantAct）を fix() する。
     """
-    if hasattr(model, 'running_stat') and hasattr(model, 'fix'):
-        model.fix()
-        return
-    for child in model.children():
-        freeze_model(child)
+    for module in model.modules():
+        if hasattr(module, 'running_stat') and hasattr(module, 'fix'):
+            module.fix()
 
 
 def unfreeze_model(model: nn.Module):
     """
-    QuantAct の活性化レンジ固定を解除する（再帰的）。
+    QuantAct の活性化レンジ固定を解除する。
+    model.modules() で全サブモジュールをフラットに列挙し、
+    running_stat 属性をもつモジュール（QuantAct）を unfix() する。
     """
-    if hasattr(model, 'running_stat') and hasattr(model, 'unfix'):
-        model.unfix()
-        return
-    for child in model.children():
-        unfreeze_model(child)
+    for module in model.modules():
+        if hasattr(module, 'running_stat') and hasattr(module, 'unfix'):
+            module.unfix()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -349,7 +345,7 @@ class tools:
         try:
             path = os.path.join(config["RUN_DIR"], filename)
             torch.save(model.state_dict(), path)
-            print(f"[OK] Model saved at {path}")
+            # print(f"[OK] Model saved at {path}")
         except Exception as e:
             print(f"[Error] Failed to save model — {e}")
 
@@ -365,7 +361,7 @@ class tools:
             ax2.set_xlabel("epoch"); ax2.set_ylabel("acc (%)"); ax2.legend(); ax2.grid()
             path = os.path.join(config["RUN_DIR"], "curves.png")
             fig.savefig(path); plt.close(fig)
-            print(f"[OK] Curves saved at {path}")
+            # print(f"[OK] Curves saved at {path}")
         except Exception as e:
             print(f"[Error] Failed to save curves — {e}")
 
@@ -460,7 +456,7 @@ class tools:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(info, f, indent=4, ensure_ascii=False)
-            print(f"[OK] Training info saved at {path}")
+            # print(f"[OK] Training info saved at {path}")
         except Exception as e:
             print(f"[Error] Failed to save training info — {e}")
 
@@ -542,41 +538,34 @@ class TrainUtils:
     @staticmethod
     def train_one_epoch(model, device, loader, mixup_fn, criterion, optimizer,
                         loss_scaler: NativeScaler, clip_grad, model_ema):
-        """1エポック分の学習（NativeScaler AMP + rich progress bar）"""
+        """1エポック分の学習（NativeScaler AMP + tqdm progress bar）"""
         model.train()
         unfreeze_model(model)
 
         loss_sum, count = 0.0, 0
 
-        with Progress(
-            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=None, style="grey30", complete_style="bold green", finished_style="bold green"),
-            MofNCompleteColumn(), TimeRemainingColumn(), TransferSpeedColumn(),
-            transient=True, expand=True, redirect_stdout=True, redirect_stderr=True,
-        ) as progress:
-            
-            task = progress.add_task("Train", total=len(loader))
-            for i, (data, target) in enumerate(loader):
-                data   = data.to(device, non_blocking=True)
-                target = target.to(device, non_blocking=True)
+        pbar = tqdm(loader, desc="Train", leave=False, dynamic_ncols=True)
+        for data, target in pbar:
+            data   = data.to(device, non_blocking=True)
+            target = target.to(device, non_blocking=True)
 
-                if mixup_fn is not None:
-                    data, target = mixup_fn(data, target)
+            if mixup_fn is not None:
+                data, target = mixup_fn(data, target)
 
-                output = model(data)
-                loss   = criterion(output, target)
+            output = model(data)
+            loss   = criterion(output, target)
 
-                optimizer.zero_grad()
-                is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
-                loss_scaler(loss, optimizer, clip_grad=clip_grad, parameters=model.parameters(), create_graph=is_second_order)
-                torch.cuda.synchronize()
+            optimizer.zero_grad()
+            is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
+            loss_scaler(loss, optimizer, clip_grad=clip_grad, parameters=model.parameters(), create_graph=is_second_order)
+            torch.cuda.synchronize()
 
-                if model_ema is not None:
-                    model_ema.update(model)
+            if model_ema is not None:
+                model_ema.update(model)
 
-                loss_sum += loss.item() * data.size(0)
-                count    += data.size(0)
-                progress.update(task, advance=1)
+            loss_sum += loss.item() * data.size(0)
+            count    += data.size(0)
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         return loss_sum / count
 
@@ -590,24 +579,14 @@ class TrainUtils:
 
         loss_sum, count = 0.0, 0
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=None, style="grey30",
-                      complete_style="bold green", finished_style="bold green"),
-            MofNCompleteColumn(), TimeRemainingColumn(), TransferSpeedColumn(),
-            transient=True, expand=True, redirect_stdout=True, redirect_stderr=True,
-        ) as progress:
-            task = progress.add_task("Test", total=len(loader))
-            for data, target in loader:
-                data   = data.to(device, non_blocking=True)
-                target = target.to(device, non_blocking=True)
-                output = model(data)
-                loss   = criterion(output, target)
-                loss_sum += loss.item() * data.size(0)
-                count    += data.size(0)
-                metric.update(output, target)
-                progress.update(task, advance=1)
+        for data, target in tqdm(loader, desc="Test", leave=False, dynamic_ncols=True):
+            data   = data.to(device, non_blocking=True)
+            target = target.to(device, non_blocking=True)
+            output = model(data)
+            loss   = criterion(output, target)
+            loss_sum += loss.item() * data.size(0)
+            count    += data.size(0)
+            metric.update(output, target)
 
         acc = metric.compute().item()
         metric.reset()
