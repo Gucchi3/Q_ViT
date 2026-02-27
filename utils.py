@@ -27,7 +27,7 @@ from timm.data.transforms_factory import create_transform
 from timm.loss.cross_entropy import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.optim import create_optimizer_v2
 from timm.scheduler.cosine_lr import CosineLRScheduler
-from timm.utils import NativeScaler, ModelEma
+from timm.utils import ModelEma
 from torcheval.metrics import MulticlassAccuracy
 
 from rich.progress import (
@@ -147,10 +147,12 @@ class tools:
             from model.i_vit import get_model
         elif model_type == "swin":
             from model.swin import get_model
+        elif model_type in ("cnn", "tiny"):
+            from model.cnn import get_model
         else:
             raise ValueError(
                 f"Unknown model type '{model_type}' derived from MODEL='{config['MODEL']}'. "
-                "Supported prefixes: 'deit', 'swin'.")
+                "Supported prefixes: 'deit', 'swin', 'cnn'.")
 
         model = get_model(model_name)(
             pretrained     = config["PRETRAINED"],
@@ -365,7 +367,7 @@ class tools:
             ax2.set_xlabel("epoch"); ax2.set_ylabel("acc (%)"); ax2.legend(); ax2.grid()
             path = os.path.join(config["RUN_DIR"], "curves.png")
             fig.savefig(path); plt.close(fig)
-            print(f"[OK] Curves saved at {path}")
+            # print(f"[OK] Curves saved at {path}")
         except Exception as e:
             print(f"[Error] Failed to save curves — {e}")
 
@@ -460,7 +462,7 @@ class tools:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(info, f, indent=4, ensure_ascii=False)
-            print(f"[OK] Training info saved at {path}")
+            # print(f"[OK] Training info saved at {path}")
         except Exception as e:
             print(f"[Error] Failed to save training info — {e}")
 
@@ -473,9 +475,9 @@ class TrainUtils:
     @staticmethod
     def setup_training(model: nn.Module, config: dict, device: torch.device):
         """
-        optimizer / scheduler / criterion / mixup / scaler / ema をまとめて初期化する。
+        optimizer / scheduler / criterion / mixup / ema をまとめて初期化する。
         戻り値: (mixup_fn, train_criterion, test_criterion, optimizer,
-                 lr_scheduler, loss_scaler, model_ema, metric, epochs)
+                 lr_scheduler, model_ema, metric, epochs)
         """
         # ── Mixup /CutMix ──────────────────────────────────────────────────
         mixup_active = (config["MIXUP_ALPHA"] > 0 or config["CUTMIX_ALPHA"] > 0 or config.get("CUTMIX_MINMAX") is not None)
@@ -520,7 +522,7 @@ class TrainUtils:
         )
 
         # ── AMP スケーラー ──────────────────────────────────────────────────
-        loss_scaler = NativeScaler()
+        # autocast なしで GradScaler を使うと全勾配の NaN スキャンのみ発生するため削除
 
         # ── Model EMA ──────────────────────────────────────────────────────
         model_ema = None
@@ -536,17 +538,18 @@ class TrainUtils:
         epochs = config["EPOCHS"]
 
         return mixup_fn, train_criterion, test_criterion, optimizer, \
-               lr_scheduler, loss_scaler, model_ema, metric, epochs
+               lr_scheduler, model_ema, metric, epochs
 
     # ── 1エポック学習 ──────────────────────────────────────────────────────────
     @staticmethod
     def train_one_epoch(model, device, loader, mixup_fn, criterion, optimizer,
-                        loss_scaler: NativeScaler, clip_grad, model_ema):
-        """1エポック分の学習（NativeScaler AMP + rich progress bar）"""
+                        clip_grad, model_ema):
+        """1エポック分の学習（rich progress bar）"""
         model.train()
         unfreeze_model(model)
 
-        loss_sum, count = 0.0, 0
+        loss_sum_gpu = torch.zeros(1, device=device)
+        count = 0
 
         with Progress(
             SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
@@ -566,19 +569,21 @@ class TrainUtils:
                 output = model(data)
                 loss   = criterion(output, target)
 
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
-                loss_scaler(loss, optimizer, clip_grad=clip_grad, parameters=model.parameters(), create_graph=is_second_order)
-                torch.cuda.synchronize()
+                loss.backward(create_graph=is_second_order)
+                if clip_grad is not None:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
+                optimizer.step()
 
                 if model_ema is not None:
                     model_ema.update(model)
 
-                loss_sum += loss.item() * data.size(0)
+                loss_sum_gpu.add_(loss.detach() * data.size(0))
                 count    += data.size(0)
                 progress.update(task, advance=1)
 
-        return loss_sum / count
+        return (loss_sum_gpu / count).item()
 
     # ── 評価 ──────────────────────────────────────────────────────────────────
     @staticmethod
@@ -588,7 +593,8 @@ class TrainUtils:
         model.eval()
         freeze_model(model)
 
-        loss_sum, count = 0.0, 0
+        loss_sum_gpu = torch.zeros(1, device=device)
+        count = 0
 
         with Progress(
             SpinnerColumn(),
@@ -604,14 +610,14 @@ class TrainUtils:
                 target = target.to(device, non_blocking=True)
                 output = model(data)
                 loss   = criterion(output, target)
-                loss_sum += loss.item() * data.size(0)
+                loss_sum_gpu.add_(loss.detach() * data.size(0))
                 count    += data.size(0)
                 metric.update(output, target)
                 progress.update(task, advance=1)
 
         acc = metric.compute().item()
         metric.reset()
-        return loss_sum / count, acc
+        return (loss_sum_gpu / count).item(), acc
 
     # ── クラス別正答率 ─────────────────────────────────────────────────────────
     @staticmethod

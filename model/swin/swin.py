@@ -163,6 +163,7 @@ class WindowAttention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self._rel_pos_bias_cache = None  # eval時キャッシュ
 
         # define a parameter table of relative position bias
         self.relative_position_bias_table = nn.Parameter(
@@ -198,6 +199,13 @@ class WindowAttention(nn.Module):
         self.matmul_1 = QuantMatMul()
         self.matmul_2 = QuantMatMul()
 
+    def train(self, mode=True):
+        """train()モード切替時にrelative_position_biasキャッシュを無効化"""
+        super().train(mode)
+        if mode:
+            self._rel_pos_bias_cache = None
+        return self
+
     def forward(self, x, act_scaling_factor, mask: Optional[torch.Tensor] = None):
         """
         Args:
@@ -216,12 +224,17 @@ class WindowAttention(nn.Module):
 
         attn, act_scaling_factor = self.qact_attn1(attn, act_scaling_factor)
 
-        relative_position_bias_table_q, act_scaling_factor_tabel = self.qact_table(
-            self.relative_position_bias_table)
-        relative_position_bias = relative_position_bias_table_q[
-            self.relative_position_index.view(-1)].view(
-            self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+        if self._rel_pos_bias_cache is not None:
+            relative_position_bias, act_scaling_factor_tabel = self._rel_pos_bias_cache
+        else:
+            relative_position_bias_table_q, act_scaling_factor_tabel = self.qact_table(
+                self.relative_position_bias_table)
+            relative_position_bias = relative_position_bias_table_q[
+                self.relative_position_index.view(-1)].view(
+                self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)
+            relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
+            if not self.training:
+                self._rel_pos_bias_cache = (relative_position_bias, act_scaling_factor_tabel)
 
         attn, act_scaling_factor = self.qact2(
             attn, act_scaling_factor, relative_position_bias.unsqueeze(0), act_scaling_factor_tabel)
