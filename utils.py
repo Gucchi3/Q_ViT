@@ -12,6 +12,8 @@ import json
 import random
 import warnings
 import numpy as np
+import matplotlib
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 from datetime import datetime
 
@@ -357,8 +359,10 @@ class tools:
 
     # ── グラフ保存 ─────────────────────────────────────────────────────────────
     @staticmethod
-    def save_curves(train_losses, test_losses, test_accs, config: dict):
-        """学習曲線をプロットして保存"""
+    def save_curves(train_losses, test_losses, test_accs, config: dict, epoch: int = 0):
+        # """学習曲線をプロットして保存（5エポックごと）"""
+        # if epoch % 5 != 0 and epoch != config.get("EPOCHS", 0):
+        #     return
         try:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
             ax1.plot(train_losses, label="train"); ax1.plot(test_losses, label="test")
