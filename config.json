@@ -10,13 +10,13 @@
 
   "_comment_dataset": "── データセット ──  DATA_SET: CIFAR10 / CIFAR100 / IMNET",
   "DATA_DIR": "./data/",
-  "DATA_SET": "CIFAR100",
+  "DATA_SET": "CIFAR10",
 
   "_comment_training": "── 学習パラメータ ──",
-  "EPOCHS": 250,
+  "EPOCHS": 200,
   "START_EPOCH": 0,
-  "BATCH_SIZE": 128,
-  "NUM_WORKERS": 8,
+  "BATCH_SIZE": 64,
+  "NUM_WORKERS": 4,
   "PIN_MEM": true,
   "SEED": 0,
   "CLIP_GRAD": null,
