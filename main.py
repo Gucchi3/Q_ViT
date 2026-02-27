@@ -59,11 +59,6 @@ def main():
     train_losses, test_losses, test_accs = [], [], []
 
     # ── 学習ループ ────────────────────────────────────────────────────────────
-    print(f"\n{'='*60}")
-    print(f"  Training start — {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  Epochs: {start_epoch} → {epochs}")
-    print(f"  Run dir: {run_dir}")
-    print(f"{'='*60}\n")
 
     for epoch in range(start_epoch, epochs):
         # スケジューラを epoch 先頭で更新
@@ -106,7 +101,7 @@ def main():
                 checkpoint["model_ema"] = model_ema.ema.state_dict()
             ckpt_path = os.path.join(run_dir, "checkpoint_best.pth.tar")
             torch.save(checkpoint, ckpt_path)
-            print(f"  --> Best model updated: acc={best_acc1*100:.2f}%  path={ckpt_path}")
+            # print(f"  --> Best model updated: acc={best_acc1*100:.2f}%  path={ckpt_path}")
 
         # ── 最新チェックポイント（resume 用） ─────────────────────────────
         latest_ckpt = {
