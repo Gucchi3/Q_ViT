@@ -682,11 +682,9 @@ class IntLayerNorm(nn.LayerNorm):
         var_int = torch.sum(y_sq_int, axis=2, keepdim=True)
 
         # Integer Iteration
-        # floor_ste.apply を20回呼ぶ代わりに no_grad + torch.floor でCUDA完結
-        with torch.no_grad():
-            k = var_int.new_full(var_int.shape, 2**16)
-            for _ in range(10):
-                k = torch.floor((k + torch.floor(var_int / k)) / 2)
+        k = var_int.new_full(var_int.shape, 2**16)
+        for _ in range(10):
+            k = floor_ste((k + floor_ste(var_int / k)) / 2)
         std_int = k
 
         factor = floor_ste((2 ** 31 - 1) / std_int)
