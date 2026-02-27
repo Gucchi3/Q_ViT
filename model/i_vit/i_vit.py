@@ -75,9 +75,6 @@ class Mlp(nn.Module):
         x, act_scaling_factor = self.act(x, act_scaling_factor)
         # 4. 量子化（8）[int8 -> int8]
         x, act_scaling_factor = self.qact1(x, act_scaling_factor)
-        # 4.5. 正規化（IntLayerNorm）+ 量子化（8）fc2(TerLinear)前のLN #! 事前学習での次の線形層に入力されるactの分布が異なるから、精度底まで改善しないかも
-        x, act_scaling_factor = self.norm_mid(x, act_scaling_factor)
-        x, act_scaling_factor = self.qact_fc2(x, act_scaling_factor)
         x = self.drop(x)
         # 5. 線形層（TerLinear）[int8 -> int32]
         x, act_scaling_factor = self.fc2(x, act_scaling_factor)
