@@ -609,7 +609,9 @@ def swin_tiny_patch4_window7_224(pretrained=False, **kwargs):
             url="https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth",
             map_location="cpu", check_hash=True
         )
-        model.load_state_dict(checkpoint["model"], strict=False)
+        state_dict = {k: v for k, v in checkpoint["model"].items()
+                      if not k.startswith("head.")}
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 
@@ -630,7 +632,9 @@ def swin_small_patch4_window7_224(pretrained=False, **kwargs):
             url="https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_small_patch4_window7_224.pth",
             map_location="cpu", check_hash=True
         )
-        model.load_state_dict(checkpoint["model"], strict=False)
+        state_dict = {k: v for k, v in checkpoint["model"].items()
+                      if not k.startswith("head.")}
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 
@@ -651,7 +655,9 @@ def swin_base_patch4_window7_224(pretrained=False, **kwargs):
             url="https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224.pth",
             map_location="cpu", check_hash=True
         )
-        model.load_state_dict(checkpoint["model"], strict=False)
+        state_dict = {k: v for k, v in checkpoint["model"].items()
+                      if not k.startswith("head.")}
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 
