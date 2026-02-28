@@ -1,5 +1,5 @@
 {
-  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / swin_tiny / swin_small / swin_base",
+  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / deit_cus / swin_tiny / swin_small / swin_base",
   "MODEL": "deit_tiny",
   "PRETRAINED": true,
   "IMG_SIZE": 224,
@@ -8,12 +8,19 @@
   "DROP": 0.0,
   "DROP_PATH": 0.1,
 
+  "_comment_deit_cus": "── DeiT カスタムモデル──",
+  "DEIT_CUS_PATCH_SIZE": 16,
+  "DEIT_CUS_EMBED_DIM": 96,
+  "DEIT_CUS_DEPTH": 6,
+  "DEIT_CUS_NUM_HEADS": 3,
+  "DEIT_CUS_MLP_RATIO": 2.0,
+
   "_comment_dataset": "── データセット ──  DATA_SET: CIFAR10 / CIFAR100 / IMNET",
   "DATA_DIR": "./data/",
   "DATA_SET": "CIFAR10",
 
   "_comment_training": "── 学習パラメータ ──",
-  "EPOCHS": 200,
+  "EPOCHS": 750,
   "START_EPOCH": 0,
   "BATCH_SIZE": 64,
   "NUM_WORKERS": 4,

@@ -148,12 +148,23 @@ class tools:
                 f"Unknown model type '{model_type}' derived from MODEL='{config['MODEL']}'. "
                 "Supported prefixes: 'deit', 'swin'.")
 
+        extra_kwargs = {}
+        if model_name == "deit_cus":
+            extra_kwargs = {
+                "patch_size": config.get("DEIT_CUS_PATCH_SIZE", 16),
+                "embed_dim":  config.get("DEIT_CUS_EMBED_DIM",  192),
+                "depth":      config.get("DEIT_CUS_DEPTH",       12),
+                "num_heads":  config.get("DEIT_CUS_NUM_HEADS",    3),
+                "mlp_ratio":  config.get("DEIT_CUS_MLP_RATIO",    4.0),
+            }
+
         model = get_model(model_name)(
             pretrained     = config["PRETRAINED"],
             num_classes    = config["NUM_CLASSES"],
             in_chans       = config.get("IN_CHANS", 3),
             drop_rate      = config["DROP"],
             drop_path_rate = config["DROP_PATH"],
+            **extra_kwargs,
         )
         model.to(device)
         return model

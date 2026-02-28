@@ -10,6 +10,7 @@ from .i_vit import (
     deit_tiny_patch16_224,
     deit_small_patch16_224,
     deit_base_patch16_224,
+    deit_cus,
 )
 from .quant_module import QuantAct  # freeze/unfreeze 判定用
 
@@ -18,6 +19,7 @@ __all__ = [
     "deit_tiny_patch16_224",
     "deit_small_patch16_224",
     "deit_base_patch16_224",
+    "deit_cus",
 ]
 
 # ── モデル名 → 構築関数マッピング ─────────────────────────────────────────────────────
@@ -25,6 +27,7 @@ MODEL_MAP = {
     "deit_tiny":  deit_tiny_patch16_224,
     "deit_small": deit_small_patch16_224,
     "deit_base":  deit_base_patch16_224,
+    "deit_cus":   deit_cus,
 }
 
 

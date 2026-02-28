@@ -24,7 +24,7 @@ except ImportError:
     from model.i_vit.utils import load_weights_from_npz, trunc_normal_, to_2tuple
 
 
-__all__ = ['deit_tiny_patch16_224', 'deit_small_patch16_224', 'deit_base_patch16_224']
+__all__ = ['deit_tiny_patch16_224', 'deit_small_patch16_224', 'deit_base_patch16_224', 'deit_cus']
 
 
 # ── DropPath（Stochastic Depth） ──────────────────────────────────────────────
@@ -448,6 +448,27 @@ def deit_base_patch16_224(pretrained=False, **kwargs):
             map_location="cpu", check_hash=True
         )
         model.load_state_dict(checkpoint["model"], strict=False)
+    return model
+
+
+# ── DeiT-Custom モデル構築 ────────────────────────────────────────────────────────────
+def deit_cus(pretrained=False, patch_size=16, embed_dim=192, depth=12,
+             num_heads=3, mlp_ratio=4, **kwargs):
+    """ユーザーが config.json で構造を自由に指定できるカスタム DeiT モデル。
+    事前学習済みチェックポイントは存在しないため pretrained=True でも重みはロードされません。
+    """
+    if pretrained:
+        print("[Warning] deit_cus: 事前学習済み重みは存在しません（カスタム構造のため無視）。")
+    model = VisionTransformer(
+        patch_size=patch_size,
+        embed_dim=embed_dim,
+        depth=depth,
+        num_heads=num_heads,
+        mlp_ratio=mlp_ratio,
+        qkv_bias=True,
+        norm_layer=partial(IntLayerNorm, eps=1e-6),
+        **kwargs,
+    )
     return model
 
 
