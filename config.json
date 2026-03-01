@@ -1,6 +1,6 @@
 {
-  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / deit_cus / swin_tiny / swin_small / swin_base",
-  "MODEL": "deit_tiny",
+  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / deit_cus / swin_tiny / swin_small / swin_base / eformer_v1_l1 / eformer_v1_l3 / eformer_v1_l7 / eformer_v2_s0 / eformer_v2_s1 / eformer_v2_s2 / eformer_v2_l / q_eformer_v2_s0 / q_eformer_v2_s1 / q_eformer_v2_s2 / q_eformer_v2_l / test / test2",
+  "MODEL": "test2",
   "PRETRAINED": true,
   "IMG_SIZE": 224,
   "IN_CHANS": 3,
@@ -37,10 +37,10 @@
 
   "_comment_scheduler": "── スケジューラ ──  SCHEDULER: cosine / step（未実装） / plateau（未実装）",
   "SCHEDULER": "cosine",
-  "LEARNING_RATE": 1e-4,
+  "LEARNING_RATE": 5e-4,
   "LR_MIN": 5e-7,
   "WARMUP_LR_INIT": 1e-6,
-  "WARMUP_EPOCHS": 5,
+  "WARMUP_EPOCHS": 0,
   "WARMUP_PREFIX": true,
   
   "DECAY_EPOCHS": 30,

@@ -426,7 +426,8 @@ def deit_small_patch16_224(pretrained=False, **kwargs):
             url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
             map_location="cpu", check_hash=True
         )
-        model.load_state_dict(checkpoint["model"], strict=False)
+        state_dict = {k: v for k, v in checkpoint["model"].items() if not k.startswith("head.")}
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 
@@ -447,7 +448,8 @@ def deit_base_patch16_224(pretrained=False, **kwargs):
             url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
             map_location="cpu", check_hash=True
         )
-        model.load_state_dict(checkpoint["model"], strict=False)
+        state_dict = {k: v for k, v in checkpoint["model"].items() if not k.startswith("head.")}
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 

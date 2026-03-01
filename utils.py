@@ -100,7 +100,7 @@ class tools:
             print(f"[Warning] weight file not found: {weight_path}")
             return model
         try:
-            obj = torch.load(weight_path, map_location=device, weights_only=True)
+            obj = torch.load(weight_path, map_location=device, weights_only=False)
             # main.py が保存するフルチェックポイント形式にも対応
             state_dict = obj["model"] if isinstance(obj, dict) and "model" in obj else obj
             model.load_state_dict(state_dict)
@@ -121,7 +121,7 @@ class tools:
             print(f"[Warning] checkpoint not found: {path}")
             return 0
         try:
-            ckpt = torch.load(path, map_location=device, weights_only=True)
+            ckpt = torch.load(path, map_location=device, weights_only=False)
             model.load_state_dict(ckpt["model"])
             optimizer.load_state_dict(ckpt["optimizer"])
             lr_scheduler.load_state_dict(ckpt["lr_scheduler"])
@@ -137,16 +137,27 @@ class tools:
     def build_model(config: dict, device: torch.device) -> nn.Module:
         """config の MODEL キーからモデルを生成して device に転送する"""
         model_name = config["MODEL"].lower()
-        model_type = model_name.split("_")[0]   # "deit" / "swin"
 
-        if model_type == "deit":
+        if model_name.startswith("deit"):
             from model.i_vit import get_model
-        elif model_type == "swin":
+        elif model_name.startswith("swin"):
             from model.swin import get_model
+        elif model_name.startswith("q_eformer_v2"):
+            from model.q_eformer_v2 import get_model
+        elif model_name.startswith("eformer_v1"):
+            from model.eformer_v1 import get_model
+        elif model_name.startswith("eformer_v2"):
+            from model.eformer_v2 import get_model
+        elif model_name.startswith("test2"):
+            from model.test2 import get_model
+        elif model_name.startswith("test"):
+            from model.test import get_model
         else:
             raise ValueError(
-                f"Unknown model type '{model_type}' derived from MODEL='{config['MODEL']}'. "
-                "Supported prefixes: 'deit', 'swin'.")
+                f"Unknown model '{config['MODEL']}'. "
+                "Supported prefixes: 'deit', 'swin', "
+                "'eformer_v1', 'eformer_v2', 'q_eformer_v2', 'test', 'test2'."
+            )
 
         extra_kwargs = {}
         if model_name == "deit_cus":
@@ -547,12 +558,19 @@ class TrainUtils:
 
     # ── 1エポック学習 ──────────────────────────────────────────────────────────
     @staticmethod
+    def _is_quantized(model: nn.Module) -> bool:
+        """QuantAct モジュール（running_stat 属性を持つ）が含まれる場合 True"""
+        return any(hasattr(m, 'running_stat') for m in model.modules())
+
+    @staticmethod
     def train_one_epoch(model, device, loader, mixup_fn, criterion, optimizer,
                         loss_scaler: NativeScaler, clip_grad, model_ema):
         """1エポック分の学習（NativeScaler AMP + tqdm progress bar）"""
         model.train()
         unfreeze_model(model)
 
+        # 量子化モデルは固定小数点演算のため autocast (fp16) 不可
+        use_amp = (device.type == 'cuda') and not TrainUtils._is_quantized(model)
         loss_sum, count = 0.0, 0
 
         pbar = tqdm(loader, desc="Train", leave=False, dynamic_ncols=True)
@@ -563,8 +581,9 @@ class TrainUtils:
             if mixup_fn is not None:
                 data, target = mixup_fn(data, target)
 
-            output = model(data)
-            loss   = criterion(output, target)
+            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+                output = model(data)
+                loss   = criterion(output, target)
 
             optimizer.zero_grad()
             is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
@@ -588,13 +607,15 @@ class TrainUtils:
         model.eval()
         freeze_model(model)
 
+        use_amp = (device.type == 'cuda') and not TrainUtils._is_quantized(model)
         loss_sum, count = 0.0, 0
 
         for data, target in tqdm(loader, desc="Test", leave=False, dynamic_ncols=True):
             data   = data.to(device, non_blocking=True)
             target = target.to(device, non_blocking=True)
-            output = model(data)
-            loss   = criterion(output, target)
+            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+                output = model(data)
+                loss   = criterion(output, target)
             loss_sum += loss.item() * data.size(0)
             count    += data.size(0)
             metric.update(output, target)
