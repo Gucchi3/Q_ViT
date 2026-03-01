@@ -147,8 +147,8 @@ class Attention4D(nn.Module):
     stride 設定時: x 全体を stride_conv で縮小後に Q/K/V を生成し、最後に upsample
     talking_head1/2 あり（V2 の特徴）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 16, num_heads: int = 4,
-                 attn_ratio: int = 2, resolution: int = 7,
+    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 4,
+                 attn_ratio: int = 4, resolution: int = 7,
                  act_layer=nn.ReLU, stride: int = None):
         super().__init__()
         self.num_heads = num_heads
@@ -255,8 +255,8 @@ class Attention4DDownsample(nn.Module):
     Q は LGQuery (stride=2)、K/V は元解像度の x から生成
     talking_head なし（原本通り）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 16, num_heads: int = 4,
-                 attn_ratio: int = 2, resolution: int = 7,
+    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 4,
+                 attn_ratio: int = 4, resolution: int = 7,
                  out_dim: int = None, act_layer=nn.ReLU):
         super().__init__()
         self.num_heads   = num_heads
@@ -382,7 +382,7 @@ class FFN(nn.Module):
     FFN ブロック: x + drop_path(layer_scale * mlp(x))
     mid_conv=True の Mlp を使用
     """
-    def __init__(self, dim: int, mlp_ratio: float = 2., act_layer=nn.GELU,
+    def __init__(self, dim: int, mlp_ratio: float = 4., act_layer=nn.GELU,
                  drop: float = 0., drop_path: float = 0.,
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5):
         super().__init__()
@@ -464,14 +464,14 @@ class Test2Model(nn.Module):
         self.ffn2 = FFN(dim=32)
         # 5. Embedding (asub=False): 32 → 48, 28 → 14
         self.emb2 = Embedding(in_chs=32, out_chs=48, asub=False)
-        # 6. Attention4D (stride=2, 内部ダウンサンプル後アップサンプル): dim=48, res=14→14
-        self.attn4d_s = Attention4D(dim=48, resolution=14, stride=2)
+        # 6. AttnFFN (stride=2, 内部ダウンサンプル後アップサンプル): dim=48, res=14→14
+        self.attn4d_s = AttnFFN(dim=48, resolution=14, stride=2)
         # self.attn4d_s = FFN(dim=48)
         # 7. Embedding (asub=True): 48 → 64, 14 → 7
         self.attn4d_ds = Embedding(in_chs=48, out_chs=64, asub=True, resolution=14)
         # self.attn4d_ds = Embedding(in_chs=48, out_chs=64, asub=False)
-        # 8. Attention4D: dim=96, res=7
-        self.attn4d = Attention4D(dim=64, resolution=7)
+        # 8. AttnFFN: dim=64, res=7
+        self.attn4d = AttnFFN(dim=64, resolution=7)
         # Head
         self.norm = nn.BatchNorm2d(64)
         self.head = nn.Linear(64, num_classes)
