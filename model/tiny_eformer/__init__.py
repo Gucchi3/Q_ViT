@@ -1,7 +1,7 @@
-from .test2_model import Test2Model, test2
+from .tiny_eformer_model import TinyEFormer, tiny_eformer
 
 MODEL_MAP = {
-    "test2": test2,
+    "tiny_eformer": tiny_eformer,
 }
 
 
@@ -9,7 +9,7 @@ def get_model(name: str):
     name_lower = name.lower()
     if name_lower not in MODEL_MAP:
         raise KeyError(
-            f"test2: unknown model '{name}'. "
+            f"tiny_eformer: unknown model '{name}'. "
             f"Available: {list(MODEL_MAP.keys())}"
         )
     return MODEL_MAP[name_lower]

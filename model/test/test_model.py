@@ -409,17 +409,16 @@ class Q_AttnFFN(nn.Module):
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5,
                  resolution: int = 7, stride: int = None):
         super().__init__()
-        self.token_mixer = Q_Attention4D(dim, resolution=resolution,
-                                          act_layer=act_layer, stride=stride)
-        self.mlp = Q_Mlp(dim, hidden_features=int(dim * mlp_ratio),
-                          act_layer=act_layer, drop=drop, mid_conv=True)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        
+        self.token_mixer = Q_Attention4D(dim, resolution=resolution, act_layer=act_layer, stride=stride)
+        self.mlp         = Q_Mlp(dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop, mid_conv=True)
+        self.drop_path   = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        
         self.use_layer_scale = use_layer_scale
         if use_layer_scale:
-            self.layer_scale_1 = nn.Parameter(
-                layer_scale_init_value * torch.ones(dim, 1, 1), requires_grad=True)
-            self.layer_scale_2 = nn.Parameter(
-                layer_scale_init_value * torch.ones(dim, 1, 1), requires_grad=True)
+            self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim, 1, 1), requires_grad=True)
+            self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim, 1, 1), requires_grad=True)
+            
         self.quant_res1 = QuantAct()
         self.quant_res2 = QuantAct()
 

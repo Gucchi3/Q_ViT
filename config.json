@@ -1,6 +1,6 @@
 {
-  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / deit_cus / swin_tiny / swin_small / swin_base / eformer_v1_l1 / eformer_v1_l3 / eformer_v1_l7 / eformer_v2_s0 / eformer_v2_s1 / eformer_v2_s2 / eformer_v2_l / q_eformer_v2_s0 / q_eformer_v2_s1 / q_eformer_v2_s2 / q_eformer_v2_l / test / test2",
-  "MODEL": "test2",
+  "_comment_model": "── モデル構造 ──  deit_tiny / deit_small / deit_base / deit_cus / swin_tiny / swin_small / swin_base / eformer_v1_l1 / eformer_v1_l3 / eformer_v1_l7 / eformer_v2_s0 / eformer_v2_s1 / eformer_v2_s2 / eformer_v2_l / q_eformer_v2_s0 / q_eformer_v2_s1 / q_eformer_v2_s2 / q_eformer_v2_l / test / tiny_eformer",
+  "MODEL": "tiny_eformer",
   "PRETRAINED": true,
   "IMG_SIZE": 224,
   "IN_CHANS": 3,

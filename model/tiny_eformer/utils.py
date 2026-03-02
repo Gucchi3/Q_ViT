@@ -1,5 +1,5 @@
 """
-utils.py (model/test2)
+utils.py (model/tiny_eformer)
 EfficientFormer V2 共通ユーティリティ（通常版）
 """
 

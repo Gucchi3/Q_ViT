@@ -148,15 +148,15 @@ class tools:
             from model.eformer_v1 import get_model
         elif model_name.startswith("eformer_v2"):
             from model.eformer_v2 import get_model
-        elif model_name.startswith("test2"):
-            from model.test2 import get_model
+        elif model_name.startswith("tiny_eformer"):
+            from model.tiny_eformer import get_model
         elif model_name.startswith("test"):
             from model.test import get_model
         else:
             raise ValueError(
                 f"Unknown model '{config['MODEL']}'. "
                 "Supported prefixes: 'deit', 'swin', "
-                "'eformer_v1', 'eformer_v2', 'q_eformer_v2', 'test', 'test2'."
+                "'eformer_v1', 'eformer_v2', 'q_eformer_v2', 'test', 'tiny_eformer'."
             )
 
         extra_kwargs = {}

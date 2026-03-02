@@ -1,14 +1,14 @@
 """
-test2_model.py
-テスト用モデル（通常版）── モジュールを1つずつ明示的に定義して接続する実験用フレーム
+tiny_eformer_model.py
+Tiny EfficientFormer モデル（通常版）── モジュールを1つずつ明示的に定義して接続する実験用フレーム
 
 量子化なしの EfficientFormerV2 モジュールをそのまま移植。
 test/test_model.py の量子化版と対応する非量子化版。
 
 使い方:
-  1. Test2Model.__init__ に self.xxx = <モジュール> を1つずつ書いていく
-  2. Test2Model.forward に x を渡しながら1行ずつ接続する
-  3. config.json の MODEL を "test2" にすると main.py から呼ばれる
+  1. TinyEFormer.__init__ に self.xxx = <モジュール> を1つずつ書いていく
+  2. TinyEFormer.forward に x を渡しながら1行ずつ接続する
+  3. config.json の MODEL を "tiny_eformer" にすると main.py から呼ばれる
 
 S0 パラメータ参考:
   embed_dims = [32, 48, 96, 176]
@@ -148,8 +148,8 @@ class Attention4D(nn.Module):
     talking_head1/2 あり（V2 の特徴）
     """
     def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 4,
-                 attn_ratio: int = 4, resolution: int = 7,
-                 act_layer=nn.ReLU, stride: int = None):
+                attn_ratio: int = 4, resolution: int = 7,
+                act_layer=nn.ReLU, stride: int = None):
         super().__init__()
         self.num_heads = num_heads
         self.scale     = key_dim ** -0.5
@@ -162,8 +162,7 @@ class Attention4D(nn.Module):
             self.resolution  = math.ceil(resolution / stride)
             self.stride_conv = nn.Sequential(
                 nn.Conv2d(dim, dim, kernel_size=3, stride=stride, padding=1, groups=dim),
-                nn.BatchNorm2d(dim),
-            )
+                nn.BatchNorm2d(dim))
             self.upsample    = nn.Upsample(scale_factor=stride, mode='bilinear')
         else:
             self.resolution  = resolution
@@ -195,8 +194,8 @@ class Attention4D(nn.Module):
         self.proj = nn.Sequential(
             act_layer(),
             nn.Conv2d(self.dh, dim, 1),
-            nn.BatchNorm2d(dim),
-        )
+            nn.BatchNorm2d(dim)
+            )
 
         pts = list(itertools.product(range(self.resolution), range(self.resolution)))
         attention_offsets = {}
@@ -208,8 +207,7 @@ class Attention4D(nn.Module):
                     attention_offsets[off] = len(attention_offsets)
                 idxs.append(attention_offsets[off])
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs',
-                             torch.LongTensor(idxs).view(self.N, self.N))
+        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(self.N, self.N))
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -228,11 +226,11 @@ class Attention4D(nn.Module):
         q = self.q(x).flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
         k = self.k(x).flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 2, 3)
         v = self.v(x)
+        
         v_local = self.v_local(v)
         v = v.flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
 
-        ab = (self.ab if hasattr(self, 'ab') else
-              self.attention_biases[:, self.attention_bias_idxs])
+        ab = (self.ab if hasattr(self, 'ab') else self.attention_biases[:, self.attention_bias_idxs])
         attn = (q @ k) * self.scale + ab.to(q.device)
         attn = self.talking_head1(attn)
         attn = attn.softmax(dim=-1)
@@ -436,12 +434,12 @@ class AttnFFN(nn.Module):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ── Test2Model ──
+# ── TinyEFormer ──
 # ══════════════════════════════════════════════════════════════════════════════
 
-class Test2Model(nn.Module):
+class TinyEFormer(nn.Module):
     """
-    実験用モデル（通常版・量子化なし）。
+    Tiny EfficientFormer モデル（通常版・量子化なし）。
     __init__ に self.xxx = <モジュール> を1つずつ記述し、
     forward で x を渡しながら接続する。
 
@@ -493,9 +491,9 @@ class Test2Model(nn.Module):
 
 # ── ファクトリ関数 ────────────────────────────────────────────────────────────
 
-def test2(pretrained: bool = False, num_classes: int = 10, **kwargs):
-    """config の MODEL="test2" で呼ばれるエントリポイント"""
-    model = Test2Model(num_classes=num_classes, **kwargs)
+def tiny_eformer(pretrained: bool = False, num_classes: int = 10, **kwargs):
+    """config の MODEL="tiny_eformer" で呼ばれるエントリポイント"""
+    model = TinyEFormer(num_classes=num_classes, **kwargs)
     return model
 
 
@@ -504,5 +502,5 @@ def test2(pretrained: bool = False, num_classes: int = 10, **kwargs):
 if __name__ == "__main__":
     from torchinfo import summary
 
-    model = Test2Model(num_classes=10)
+    model = TinyEFormer(num_classes=10)
     summary(model, input_size=(1, 3, 224, 224))
