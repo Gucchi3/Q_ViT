@@ -92,8 +92,7 @@ class Attention(nn.Module):
                 if offset not in attention_offsets:
                     attention_offsets[offset] = len(attention_offsets)
                 idxs.append(attention_offsets[offset])
-        self.attention_biases = nn.Parameter(
-            torch.zeros(num_heads, len(attention_offsets)))
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
         self.register_buffer('attention_bias_idxs',torch.LongTensor(idxs).view(N, N))
 
     @torch.no_grad()

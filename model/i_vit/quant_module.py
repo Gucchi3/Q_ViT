@@ -710,6 +710,126 @@ class QuantConv2d(nn.Conv2d):
                          self.dilation, self.groups) * correct_output_scale, correct_output_scale)
 
 
+# ── 量子化BN+畳み込み層 ──────────────────────────────────────────────────────────────────
+class QuantBNConv2d(nn.Module):
+    """
+    BN を畳み込みに折り畳んだ量子化 Conv2d 層。
+
+    Parameters
+    ----------
+    in_channels, out_channels, kernel_size : 通常の Conv2d と同じ。
+    weight_bit : int
+        重みの量子化ビット幅。
+    bias_bit : int
+        バイアスの量子化ビット幅。
+    quant_mode : str
+        'symmetric' のみ対応。
+    per_channel : bool
+        チャネルごと量子化するか（現在 per-tensor 固定）。
+    """
+
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups=1,
+                 eps: float = 1e-5,
+                 momentum: float = 0.1,
+                 weight_bit: int = 8,
+                 bias_bit: int = 32,
+                 quant_mode: str = "symmetric",
+                 per_channel: bool = True):
+        super().__init__()
+        ks = (kernel_size, kernel_size) if isinstance(kernel_size, int) else tuple(kernel_size)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = ks
+        self.stride = (stride, stride) if isinstance(stride, int) else tuple(stride)
+        self.padding = (padding, padding) if isinstance(padding, int) else tuple(padding)
+        self.dilation = (dilation, dilation) if isinstance(dilation, int) else tuple(dilation)
+        self.groups = groups
+
+        self.weight = nn.Parameter(torch.empty(out_channels, in_channels // groups, *ks))
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        self.bn = nn.BatchNorm2d(out_channels, eps=eps, momentum=momentum)
+
+        self.weight_bit = weight_bit
+        self.bias_bit = bias_bit
+        self.quant_mode = quant_mode
+        self.per_channel = per_channel
+
+        self.register_buffer('conv_scaling_factor', torch.zeros(out_channels))
+
+        if quant_mode == "symmetric":
+            self.weight_function = SymmetricQuantFunction.apply
+            self.bias_function = SymmetricQuantFunction.apply
+        else:
+            raise ValueError(f"unknown quant mode: {quant_mode}")
+
+    def __repr__(self):
+        return (
+            f"QuantBNConv2d({self.in_channels}, {self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}, groups={self.groups}, "
+            f"weight_bit={self.weight_bit})"
+        )
+
+    def _fold_bn(self, mu, sigma2):
+        W = self.weight
+        gamma = self.bn.weight
+        beta = self.bn.bias
+        sigma = (sigma2 + self.bn.eps).sqrt()
+        s = gamma / sigma
+        return W * s.view(-1, 1, 1, 1), beta - mu * s
+
+    def forward(self, x: torch.Tensor, pre_act_scaling_factor: torch.Tensor):
+        # 入力のスケール
+        pre_act_sf = pre_act_scaling_factor.view(1)
+        
+        #? 学習時はConv2d -> 平均分散を取得 -> BNで内部runnning_mead, varを更新 
+        if self.training:
+            y_fp = F.conv2d(x, self.weight, None, self.stride, self.padding, self.dilation, self.groups)
+            with torch.no_grad():
+                _ = self.bn(y_fp.detach())
+            mu = y_fp.mean(dim=[0, 2, 3])
+            sigma2 = y_fp.var(dim=[0, 2, 3], unbiased=False)
+        else:
+            #! eval時は学習しているrunning_mean, varを使う
+            mu = self.bn.running_mean
+            sigma2 = self.bn.running_var
+
+        # BN fold
+        W_fold, b_fold = self._fold_bn(mu, sigma2)
+
+        # 重みの量子化スケール取得
+        with torch.no_grad():
+            if self.per_channel:
+                v = W_fold.detach().reshape(W_fold.shape[0], -1)
+                min_val = v.min(axis=1).values
+                max_val = v.max(axis=1).values
+                self.conv_scaling_factor = symmetric_linear_quantization_params(self.weight_bit, min_val, max_val)
+            else:
+                v = W_fold.detach().reshape(-1)
+                self.conv_scaling_factor = symmetric_linear_quantization_params(self.weight_bit, v.min().unsqueeze(0), v.max().unsqueeze(0))
+        # 重みを量子化
+        weight_integer = self.weight_function(W_fold, self.weight_bit, self.conv_scaling_factor, True)
+        # biasの量子化スケール取得
+        bias_scaling_factor = self.conv_scaling_factor * pre_act_sf
+        # biasの量子化
+        bias_integer = self.bias_function(b_fold, self.bias_bit, bias_scaling_factor, True)
+        # 入力xを整数に戻す
+        x_int = round_ste.apply(x / pre_act_sf.view(1, 1, 1, 1))
+        # スケール
+        correct_output_scale = bias_scaling_factor.view(1, -1, 1, 1)
+        # 畳み込み
+        out_int = F.conv2d(x_int, weight_integer, bias_integer, self.stride, self.padding, self.dilation, self.groups)
+        # return
+        return out_int * correct_output_scale, correct_output_scale
+
+
 # ── 整数レイヤー正規化 ────────────────────────────────────────────────────────────────
 class IntLayerNorm(nn.LayerNorm):
     """
