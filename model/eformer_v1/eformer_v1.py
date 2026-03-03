@@ -94,8 +94,7 @@ class Attention(nn.Module):
                 idxs.append(attention_offsets[offset])
         self.attention_biases = nn.Parameter(
             torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs',
-                             torch.LongTensor(idxs).view(N, N))
+        self.register_buffer('attention_bias_idxs',torch.LongTensor(idxs).view(N, N))
 
     @torch.no_grad()
     def train(self, mode=True):
@@ -108,15 +107,11 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x)
-        q, k, v = qkv.reshape(B, N, self.num_heads, -1).split(
-            [self.key_dim, self.key_dim, self.d], dim=3)
+        q, k, v = qkv.reshape(B, N, self.num_heads, -1).split([self.key_dim, self.key_dim, self.d], dim=3)
         q = q.permute(0, 2, 1, 3)
         k = k.permute(0, 2, 1, 3)
         v = v.permute(0, 2, 1, 3)
-        attn = (q @ k.transpose(-2, -1)) * self.scale + (
-            self.attention_biases[:, self.attention_bias_idxs]
-            if self.training else self.ab
-        )
+        attn = (q @ k.transpose(-2, -1)) * self.scale + (self.attention_biases[:, self.attention_bias_idxs] if self.training else self.ab)
         attn = attn.softmax(dim=-1)
         x = (attn @ v).transpose(1, 2).reshape(B, N, self.dh)
         x = self.proj(x)
