@@ -1,8 +1,3 @@
-"""
-utils.py (model/eformer_v1)
-EfficientFormer V1 共通ユーティリティ
-"""
-
 import math
 import warnings
 from itertools import repeat

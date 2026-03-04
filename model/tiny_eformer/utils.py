@@ -1,8 +1,3 @@
-"""
-utils.py (model/tiny_eformer)
-EfficientFormer V2 共通ユーティリティ（通常版）
-"""
-
 import math
 import warnings
 from itertools import repeat

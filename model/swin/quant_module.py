@@ -1,8 +1,3 @@
-"""
-quant_module.py (model/swin)
-I-ViT 量子化モジュール（swin 専用コピー）
-"""
-
 import pretty_errors
 import math
 import decimal

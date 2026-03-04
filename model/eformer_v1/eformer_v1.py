@@ -1,11 +1,3 @@
-"""
-eformer_v1.py
-EfficientFormer V1 モデル定義（量子化なし）
-
-論文: EfficientFormer: Vision Transformers at MobileNet Speed
-重み: ./data/efficientformer_l{1,3,7}_xxxd.pth
-"""
-
 import os
 import copy
 import itertools

@@ -1,23 +1,3 @@
-"""
-tiny_eformer_model.py
-Tiny EfficientFormer モデル（通常版）── モジュールを1つずつ明示的に定義して接続する実験用フレーム
-
-量子化なしの EfficientFormerV2 モジュールをそのまま移植。
-test/test_model.py の量子化版と対応する非量子化版。
-
-使い方:
-  1. TinyEFormer.__init__ に self.xxx = <モジュール> を1つずつ書いていく
-  2. TinyEFormer.forward に x を渡しながら1行ずつ接続する
-  3. config.json の MODEL を "tiny_eformer" にすると main.py から呼ばれる
-
-S0 パラメータ参考:
-  embed_dims = [32, 48, 96, 176]
-  layers     = [2, 2, 6, 4]       # 各ステージのブロック数
-  vit_num    = 2                  # 各ステージ末尾 vit_num 個が AttnFFN
-  e_ratios   = {'0':[4,4], '1':[4,4], '2':[4,3,3,3,4,4], '3':[4,3,3,4]}
-  resolution = 224 (入力) → stem後: 56 → 28 → 14 → 7
-"""
-
 import math
 import itertools
 

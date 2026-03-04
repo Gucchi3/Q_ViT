@@ -1,15 +1,3 @@
-"""
-test.py
-QuantBNConv2d / nn.ReLU6 / QuantAct / QuantLinear を用いた簡単な量子化 CNN モデル。
-
-ネットワーク構造（CIFAR-10 を想定: 入力 3×32×32）:
-    入力 → QuantAct
-    Block1: QuantBNConv2d(3→32, 3×3, pad=1) → ReLU6 → QuantAct
-    Block2: QuantBNConv2d(32→64, 3×3, stride=2, pad=1) → ReLU6 → QuantAct
-    Block3: QuantBNConv2d(64→128, 3×3, stride=2, pad=1) → ReLU6 → QuantAct
-    AdaptiveAvgPool2d(1) → Flatten
-    QuantLinear(128 → num_classes)
-"""
 
 import torch
 import torch.nn as nn
@@ -28,43 +16,13 @@ def test_cnn(pretrained: bool = False,
              drop_path_rate: float = 0.0,
              weight_bit: int = 8,
              act_bit: int = 8,
-             **kwargs) -> 'TestCNN':
-    """
-    utils.build_model から呼ばれるファクトリ関数。
-    pretrained / in_chans / drop_rate / drop_path_rate は
-    インターフェース統一のため受け取るが TestCNN では未使用。
-    """
-    model = TestCNN(num_classes=num_classes, weight_bit=weight_bit, act_bit=act_bit)
+             **kwargs) -> 'test':
+
+    model = test(num_classes=num_classes, weight_bit=weight_bit, act_bit=act_bit)
     return model
 
 
-class TestCNN(nn.Module):
-    """
-    量子化 TinyEFormer（QAT 版）。
-
-    module.py の量子化モジュールを使い、tiny_eformer と同じ構造を
-    QAT（Quantization-Aware Training）で学習できる形で再実装する。
-    モジュールはすべて __init__ で 1 つずつインスタンス化し、
-    forward で 1 つずつ (x, sf) を渡しながら呼び出す。
-
-    CIFAR-10 想定: 入力 (B, 3, 32, 32)
-    ※ 224×224 の場合は stem 後 56×56 → 28 → 14 → 7 になるが、
-      32×32 では stem 後 8×8 → 4 → 2 → 1 と解像度が落ちるため、
-      Attention4D の resolution は入力サイズに合わせて設定する。
-      デフォルトは img_size=224 で構築している。
-
-    Parameters
-    ----------
-    num_classes : int
-        出力クラス数（デフォルト: 10）。
-    weight_bit : int
-        重み量子化ビット幅（デフォルト: 8）。
-    act_bit : int
-        活性化量子化ビット幅（デフォルト: 8）。
-    img_size : int
-        入力画像サイズ（デフォルト: 224）。
-    """
-
+class test(nn.Module):
     def __init__(self, num_classes: int = 10,
                  weight_bit: int = 8, act_bit: int = 8,
                  img_size: int = 224):
@@ -111,17 +69,6 @@ class TestCNN(nn.Module):
         self.head = QuantLinear(in_features=64, out_features=num_classes, bias=True, weight_bit=weight_bit, per_channel=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ----------
-        x : torch.Tensor
-            入力テンソル。shape = (B, 3, H, W)。
-
-        Returns
-        -------
-        torch.Tensor
-            クラスロジット。shape = (B, num_classes)。
-        """
 
         # ── Stem ──────────────────────────────────────────────────────────────
         # float 入力を int8 に量子化し、Conv×2(s=2) で空間を 1/4 に縮小

@@ -1,11 +1,3 @@
-"""
-i_vit.py
-I-ViT の DeiT（Data-Efficient Image Transformer）量子化モデル定義
-
-model/i-vitのQATを用いた量子化のコードをもとに、model/tiny_eformerのモデルを、QATの量子化でmodel/testに実装してください。基本的にはi-vitのモデル構造を基本として、作成してください。できるだけわかりやすいように、i-vitのコメントの様式に順守してコメントを付与してください。バッチ正規化に関しては、model/q_eformer_v2/module.pyに実装してある、QuantConv2dを参考に、修正すべき点があれば修正しつつ、これを用いて実装してください。基本的に完全整数モデルにすることが目標であるため、基本i-vitの実装に沿ってください。わからない点があれば質問してください
-
-"""
-
 import pretty_errors
 from collections import OrderedDict
 from functools import partial

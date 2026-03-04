@@ -1,7 +1,4 @@
 """
-main.py
-I-ViT 量子化 ViT/Swin 学習エントリポイント
-
 Usage:
     python main.py [config.json のパス]  (省略時は ./config.json) -> python main.py
     #! バックグラウンドで実行する場合は、「nohup python -u main.py > train.log 2>&1 &」

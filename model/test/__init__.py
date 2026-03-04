@@ -1,4 +1,4 @@
-from .test import TestCNN, test_cnn
+from .test import test, test_cnn
 from .module import (
     QuantAct,
     QuantLinear,
@@ -24,7 +24,7 @@ def get_model(name: str):
 
 
 __all__ = [
-    "TestCNN",
+    "test",
     "test_cnn",
     "get_model",
     "QuantAct",

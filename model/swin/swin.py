@@ -1,8 +1,3 @@
-"""
-swin.py
-I-ViT の Swin Transformer 量子化モデル定義
-"""
-
 import pretty_errors
 from typing import Optional
 from functools import partial

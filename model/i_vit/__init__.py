@@ -1,8 +1,3 @@
-"""
-model/i_vit/__init__.py
-DeiT 量子化モデルのエクスポート
-"""
-
 import pretty_errors
 
 from .i_vit import (

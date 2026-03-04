@@ -1,8 +1,3 @@
-"""
-quant_module.py
-I-ViT 量子化モジュール（量子化ユーティリティ＋量子化レイヤーの統合ファイル）
-"""
-
 import pretty_errors
 import math
 import decimal

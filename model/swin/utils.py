@@ -1,8 +1,3 @@
-"""
-utils.py (model/swin)
-Swin 事前学習済み重みロードユーティリティ（NPZ 形式）
-"""
-
 import pretty_errors
 import os
 import math

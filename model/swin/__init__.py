@@ -1,8 +1,3 @@
-"""
-model/swin/__init__.py
-Swin Transformer 量子化モデルのエクスポート
-"""
-
 import pretty_errors
 
 from .swin import (

@@ -1,11 +1,3 @@
-"""
-utils.py
-I-ViT 学習ユーティリティ
-  - class tools       : 設定初期化・データロード・保存系
-  - class TrainUtils  : 学習ループ・評価・クラス別精度
-  - freeze_model / unfreeze_model : 量子化レンジ固定/解除
-"""
-
 import pretty_errors
 import os
 import json
@@ -142,8 +134,6 @@ class tools:
             from model.i_vit import get_model
         elif model_name.startswith("swin"):
             from model.swin import get_model
-        elif model_name.startswith("q_eformer_v2"):
-            from model.q_eformer_v2 import get_model
         elif model_name.startswith("eformer_v1"):
             from model.eformer_v1 import get_model
         elif model_name.startswith("eformer_v2"):
@@ -156,7 +146,7 @@ class tools:
             raise ValueError(
                 f"Unknown model '{config['MODEL']}'. "
                 "Supported prefixes: 'deit', 'swin', "
-                "'eformer_v1', 'eformer_v2', 'q_eformer_v2', 'test', 'tiny_eformer'."
+                "'eformer_v1', 'eformer_v2', 'test', 'tiny_eformer'."
             )
 
         extra_kwargs = {}
