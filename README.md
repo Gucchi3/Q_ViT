@@ -9,7 +9,8 @@
 
 ### Requirements
 - Python 3.12
-- CUDA 13.0
+- CUDA 13.0  
+
 ※ 基本最新versionで動作する
 
 ### CIFAR-10 / CIFAR-100
