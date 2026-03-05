@@ -363,26 +363,22 @@ class QuantLinear(nn.Linear):
                 self.max_val = cur_max
             else:
                 raise Exception('For weight, we only support per_channel quantization.')
-
-            self.fc_scaling_factor = symmetric_linear_quantization_params(
-                self.weight_bit, self.min_val, self.max_val)
-
-        self.weight_integer = self.weight_function(
-            self.weight, self.weight_bit, self.fc_scaling_factor, True)
-
+        
+            self.fc_scaling_factor = symmetric_linear_quantization_params(self.weight_bit, self.min_val, self.max_val)
+        
+        self.weight_integer = self.weight_function(self.weight, self.weight_bit, self.fc_scaling_factor, True)
+        
         bias_scaling_factor = self.fc_scaling_factor * prev_act_scaling_factor
-
+        
         if self.bias is not None:
-            self.bias_integer = self.weight_function(
-                self.bias, self.bias_bit, bias_scaling_factor, True)
+            self.bias_integer = self.weight_function(self.bias, self.bias_bit, bias_scaling_factor, True)
         else:
             self.bias_integer = None
-
+        
         prev_act_scaling_factor = prev_act_scaling_factor.view(1, -1)
         x_int = x / prev_act_scaling_factor
-
-        return F.linear(x_int, weight=self.weight_integer, bias=self.bias_integer) \
-               * bias_scaling_factor, bias_scaling_factor
+        
+        return F.linear(x_int, weight=self.weight_integer, bias=self.bias_integer) * bias_scaling_factor, bias_scaling_factor
 
 
 # ── Ternary Linear Layer ──────────────────────────────────────────────────────
@@ -461,7 +457,7 @@ class TerLinear(nn.Linear):
         if self.use_layernorm:
             x, prev_act_scaling_factor = self.layernorm(x, prev_act_scaling_factor)
             x, prev_act_scaling_factor = self.qact_norm(x, prev_act_scaling_factor)
-
+            
         with torch.no_grad():
             w = self.weight
             if self.per_channel:
@@ -470,23 +466,20 @@ class TerLinear(nn.Linear):
                 self.fc_scaling_factor = abs_mean.clamp(min=torch.finfo(torch.float32).eps)
             else:
                 raise Exception('For weight, we only support per_channel quantization.')
-
-        self.weight_integer = self.weight_function(
-            self.weight, self.weight_bit, self.fc_scaling_factor, True)
-
+        
+        self.weight_integer = self.weight_function(self.weight, self.weight_bit, self.fc_scaling_factor, True)
+        
         bias_scaling_factor = self.fc_scaling_factor * prev_act_scaling_factor
-
+        
         if self.bias is not None:
-            self.bias_integer = self.bias_function(
-                self.bias, self.bias_bit, bias_scaling_factor, True)
+            self.bias_integer = self.bias_function(self.bias, self.bias_bit, bias_scaling_factor, True)
         else:
             self.bias_integer = None
-
+        
         prev_act_scaling_factor = prev_act_scaling_factor.view(1, -1)
         x_int = x / prev_act_scaling_factor
-
-        return F.linear(x_int, weight=self.weight_integer, bias=self.bias_integer) \
-               * bias_scaling_factor, bias_scaling_factor
+        
+        return F.linear(x_int, weight=self.weight_integer, bias=self.bias_integer)  * bias_scaling_factor, bias_scaling_factor
 
 
 # ── Quantized Activation Layer ────────────────────────────────────────────────
@@ -675,7 +668,7 @@ class QuantConv2d(nn.Conv2d):
         pass
 
     def forward(self, x, pre_act_scaling_factor=None):
-        with torch.no_grad():
+        with torch.no_grad(): #! per channel
             w = self.weight
             if self.per_channel:
                 v = w.reshape(w.shape[0], -1)
@@ -686,15 +679,12 @@ class QuantConv2d(nn.Conv2d):
             else:
                 raise Exception('For weight, we only support per_channel quantization.')
 
-            self.conv_scaling_factor = symmetric_linear_quantization_params(
-                self.weight_bit, self.min_val, self.max_val)
+            self.conv_scaling_factor = symmetric_linear_quantization_params(self.weight_bit, self.min_val, self.max_val)
 
-        self.weight_integer = self.weight_function(
-            self.weight, self.weight_bit, self.conv_scaling_factor, True)
+        self.weight_integer = self.weight_function(self.weight, self.weight_bit, self.conv_scaling_factor, True)
         bias_scaling_factor = self.conv_scaling_factor * pre_act_scaling_factor
         if self.bias is not None:
-            self.bias_integer = self.weight_function(
-                self.bias, self.bias_bit, bias_scaling_factor, True)
+            self.bias_integer = self.weight_function(self.bias, self.bias_bit, bias_scaling_factor, True)
         else:
             self.bias_integer = None
 
@@ -702,8 +692,7 @@ class QuantConv2d(nn.Conv2d):
         x_int = x / pre_act_scaling_factor
         correct_output_scale = bias_scaling_factor.view(1, -1, 1, 1)
 
-        return (F.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding,
-                         self.dilation, self.groups) * correct_output_scale, correct_output_scale)
+        return (F.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding, self.dilation, self.groups) * correct_output_scale, correct_output_scale)
 
 
 # ── Quantized BN+Conv2d Layer ─────────────────────────────────────────────────
