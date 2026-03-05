@@ -18,7 +18,7 @@ from torch.nn import Parameter
 # ── 量子化ユーティリティ
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── 線形量子化関数 ───────────────────────────────────────────────────────────────────
+# ── Linear Quantization ───────────────────────────────────────────────────────
 def linear_quantize(input, scale, zero_point, is_weight):
     """
     Quantize single-precision input tensor to integers with the given scaling factor and zeropoint.
@@ -57,7 +57,7 @@ def linear_quantize(input, scale, zero_point, is_weight):
     return torch.round(1. / scale * input + zero_point)
 
 
-# ── 対称量子化スケール計算 ────────────────────────────────────────────────────────────
+# ── Symmetric Quantization Scale ──────────────────────────────────────────────
 def symmetric_linear_quantization_params(num_bits, min_val, max_val):
     """
     Compute the scaling factor with the given quantization range for symmetric quantization.
@@ -77,7 +77,7 @@ def symmetric_linear_quantization_params(num_bits, min_val, max_val):
     return scale
 
 
-# ── 対称量子化関数（STE対応） ─────────────────────────────────────────────────────────
+# ── Symmetric Quantization Function ───────────────────────────────────────────
 class SymmetricQuantFunction(Function):
     """
     Class to quantize the given floating-point values using symmetric quantization with given range and bitwidth.
@@ -117,7 +117,7 @@ class SymmetricQuantFunction(Function):
         return grad_output.clone() / scale, None, None, None
 
 
-# ── ３値量子化関数（STE対応） ─────────────────────────────────────────────────────────
+# ── Ternary Quantization Function ─────────────────────────────────────────────
 class TernaryQuantFunction(Function):
     """
     SymmetricQuantFunction と同一構造だが、clamp を固定で [-1, 1] にすることで
@@ -157,7 +157,7 @@ class TernaryQuantFunction(Function):
         return grad_output.clone() / scale, None, None, None
 
 
-# ── 床関数（STE） ────────────────────────────────────────────────────────────────────
+# ── Floor Function (STE) ──────────────────────────────────────────────────────
 class floor_ste(Function):
     """Straight-through Estimator(STE) for torch.floor()"""
 
@@ -170,7 +170,7 @@ class floor_ste(Function):
         return grad_output.clone()
 
 
-# ── 丸め関数（STE） ──────────────────────────────────────────────────────────────────
+# ── Round Function (STE) ──────────────────────────────────────────────────────
 class round_ste(Function):
     """Straight-through Estimator(STE) for torch.round()"""
 
@@ -183,7 +183,7 @@ class round_ste(Function):
         return grad_output.clone()
 
 
-# ── 指数分解関数 ─────────────────────────────────────────────────────────────────────
+# ── Batch Frexp ───────────────────────────────────────────────────────────────
 def batch_frexp(inputs, max_bit=31):
     """
     Decompose the scaling factor into mantissa and twos exponent.
@@ -209,7 +209,7 @@ def batch_frexp(inputs, max_bit=31):
            torch.from_numpy(output_e).to(device).view(shape_of_input)
 
 
-# ── 固定小数点乗算（STE対応） ─────────────────────────────────────────────────────────
+# ── Fixed-point Multiply ──────────────────────────────────────────────────────
 class fixedpoint_mul(Function):
     """
     Function to perform fixed-point arthmetic that can match integer arthmetic on hardware.
@@ -296,7 +296,7 @@ class fixedpoint_mul(Function):
 # ── 量子化レイヤー
 # ══════════════════════════════════════════════════════════════════════════════
 
-# ── 量子化線形層 ─────────────────────────────────────────────────────────────────────
+# ── Quantized Linear Layer ────────────────────────────────────────────────────
 class QuantLinear(nn.Linear):
     """
     Class to quantize weights of given Linear layer
@@ -385,7 +385,7 @@ class QuantLinear(nn.Linear):
                * bias_scaling_factor, bias_scaling_factor
 
 
-# ── ３値量子化線形層 ──────────────────────────────────────────────────────────────────
+# ── Ternary Linear Layer ──────────────────────────────────────────────────────
 class TerLinear(nn.Linear):
     """
     ３値重み量子化線形層。
@@ -489,7 +489,7 @@ class TerLinear(nn.Linear):
                * bias_scaling_factor, bias_scaling_factor
 
 
-# ── 量子化活性化層 ────────────────────────────────────────────────────────────────────
+# ── Quantized Activation Layer ────────────────────────────────────────────────
 class QuantAct(nn.Module):
     """
     Class to quantize given activations
@@ -586,7 +586,7 @@ class QuantAct(nn.Module):
         return quant_act_int * correct_output_scale, self.act_scaling_factor
 
 
-# ── 量子化行列積層 ────────────────────────────────────────────────────────────────────
+# ── Quantized MatMul Layer ────────────────────────────────────────────────────
 class QuantMatMul(nn.Module):
     """Class to quantize weights of given matmul layer"""
 
@@ -608,7 +608,7 @@ class QuantMatMul(nn.Module):
         return (A_int @ B_int) * act_scaling_factor, act_scaling_factor
 
 
-# ── 量子化畳み込み層 ──────────────────────────────────────────────────────────────────
+# ── Quantized Conv2d Layer ────────────────────────────────────────────────────
 class QuantConv2d(nn.Conv2d):
     """
     Class to quantize weights of given convolutional layer
@@ -706,7 +706,7 @@ class QuantConv2d(nn.Conv2d):
                          self.dilation, self.groups) * correct_output_scale, correct_output_scale)
 
 
-# ── 量子化BN+畳み込み層 ──────────────────────────────────────────────────────────────────
+# ── Quantized BN+Conv2d Layer ─────────────────────────────────────────────────
 class QuantBNConv2d(nn.Module):
     """
     BN を畳み込みに折り畳んだ量子化 Conv2d 層。
@@ -826,7 +826,7 @@ class QuantBNConv2d(nn.Module):
         return out_int * correct_output_scale, correct_output_scale
 
 
-# ── 整数レイヤー正規化 ────────────────────────────────────────────────────────────────
+# ── Integer Layer Norm ────────────────────────────────────────────────────────
 class IntLayerNorm(nn.LayerNorm):
     """
     Implementation of I-LayerNorm
@@ -884,7 +884,7 @@ class IntLayerNorm(nn.LayerNorm):
         return x, scaling_factor
 
 
-# ── 整数GELU活性化関数 ────────────────────────────────────────────────────────────────
+# ── Integer GELU ──────────────────────────────────────────────────────────────
 class IntGELU(nn.Module):
     """
     Implementation of ShiftGELU
@@ -940,7 +940,7 @@ class IntGELU(nn.Module):
         return x_int * scaling_factor, scaling_factor
 
 
-# ── 整数ソフトマックス ────────────────────────────────────────────────────────────────
+# ── Integer Softmax ───────────────────────────────────────────────────────────
 class IntSoftmax(nn.Module):
     """
     Implementation of Shiftmax
@@ -991,11 +991,10 @@ class IntSoftmax(nn.Module):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ── 量子化 TinyEFormer ビルディングブロック（tiny_eformer_model.py から転記・QAT 対応）
+# ── 量子化 TinyEFormer module
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── DropPath ──────────────────────────────────────────────────────────────────
-
 class DropPath(nn.Module):
     """
     Stochastic Depth（確率的深さ）。
@@ -1020,7 +1019,6 @@ class DropPath(nn.Module):
 
 
 # ── QStem ─────────────────────────────────────────────────────────────────────
-
 class QStem(nn.Module):
     """
     量子化 Stem（tiny_eformer Stem の QAT 版）。
@@ -1067,7 +1065,6 @@ class QStem(nn.Module):
 
 
 # ── QMlp ─────────────────────────────────────────────────────────────────────
-
 class QMlp(nn.Module):
     """
     量子化 MLP（tiny_eformer Mlp の QAT 版、mid_conv=True 相当）。
@@ -1116,7 +1113,6 @@ class QMlp(nn.Module):
 
 
 # ── QFFN ─────────────────────────────────────────────────────────────────────
-
 class QFFN(nn.Module):
     """
     量子化 FFN ブロック（tiny_eformer FFN の QAT 版）。
@@ -1162,7 +1158,6 @@ class QFFN(nn.Module):
 
 
 # ── QAttention4D ─────────────────────────────────────────────────────────────
-
 class QAttention4D(nn.Module):
     """
     量子化 Attention4D（tiny_eformer Attention4D の QAT 版）。
@@ -1370,7 +1365,6 @@ class QAttention4D(nn.Module):
 
 
 # ── QAttnFFN ─────────────────────────────────────────────────────────────────
-
 class QAttnFFN(nn.Module):
     """
     量子化 AttnFFN ブロック（tiny_eformer AttnFFN の QAT 版）。
@@ -1437,7 +1431,6 @@ class QAttnFFN(nn.Module):
 
 
 # ── QEmbedding ────────────────────────────────────────────────────────────────
-
 class QEmbedding(nn.Module):
     """
     量子化 Embedding（ステージ間ダウンサンプリング; tiny_eformer Embedding の asub=False 版）。
@@ -1461,7 +1454,6 @@ class QEmbedding(nn.Module):
 
 
 # ── QLGQuery ──────────────────────────────────────────────────────────────────
-
 class QLGQuery(nn.Module):
     """
     量子化 LGQuery（QAttention4DDownsample の Q ストリーム専用）。
@@ -1498,7 +1490,6 @@ class QLGQuery(nn.Module):
 
 
 # ── QAttention4DDownsample ────────────────────────────────────────────────────
-
 class QAttention4DDownsample(nn.Module):
     """
     量子化 Attention4DDownsample（QEmbeddingAttn の attention ストリーム専用）。
@@ -1643,7 +1634,6 @@ class QAttention4DDownsample(nn.Module):
 
 
 # ── QEmbeddingAttn ────────────────────────────────────────────────────────────
-
 class QEmbeddingAttn(nn.Module):
     """
     量子化 Embedding（asub=True 版; tiny_eformer Embedding の QAT 版）。
