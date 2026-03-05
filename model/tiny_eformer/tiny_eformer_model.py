@@ -43,16 +43,21 @@ class Stem(nn.Module):
     def __init__(self, in_chs: int, out_chs: int, act_layer=nn.ReLU):
         super().__init__()
         mid = out_chs // 2
-        self.conv1 = nn.Conv2d(in_chs, mid, kernel_size=3, stride=2, padding=1)
-        self.bn1   = nn.BatchNorm2d(mid)
-        self.act1  = act_layer()
-        self.conv2 = nn.Conv2d(mid, out_chs, kernel_size=3, stride=2, padding=1)
-        self.bn2   = nn.BatchNorm2d(out_chs)
-        self.act2  = act_layer()
+        # conv1: 通常 Conv
+        self.conv1   = nn.Conv2d(in_chs, mid, kernel_size=3, stride=2, padding=1)
+        self.bn1     = nn.BatchNorm2d(mid)
+        self.act1    = act_layer()
+        # conv2: DW(stride=2) + PW
+        self.conv2_dw   = nn.Conv2d(mid, mid, kernel_size=3, stride=2, padding=1, groups=mid)
+        self.bn2_dw     = nn.BatchNorm2d(mid)
+        self.act2_dw    = act_layer()
+        self.conv2_pw   = nn.Conv2d(mid, out_chs, kernel_size=1)
+        self.bn2        = nn.BatchNorm2d(out_chs)
+        self.act2       = act_layer()
 
     def forward(self, x):
         x = self.act1(self.bn1(self.conv1(x)))
-        x = self.act2(self.bn2(self.conv2(x)))
+        x = self.act2(self.bn2(self.conv2_pw(self.act2_dw(self.bn2_dw(self.conv2_dw(x))))))
         return x
 
 
@@ -76,8 +81,7 @@ class Mlp(nn.Module):
         self.drop  = nn.Dropout(drop)
 
         if mid_conv:
-            self.mid      = nn.Conv2d(hidden_features, hidden_features, 3,
-                                       stride=1, padding=1, groups=hidden_features)
+            self.mid      = nn.Conv2d(hidden_features, hidden_features, 3, stride=1, padding=1, groups=hidden_features)
             self.mid_norm = nn.BatchNorm2d(hidden_features)
 
         self.fc2   = nn.Conv2d(hidden_features, out_features, 1)
@@ -127,8 +131,8 @@ class Attention4D(nn.Module):
     stride 設定時: x 全体を stride_conv で縮小後に Q/K/V を生成し、最後に upsample
     talking_head1/2 あり（V2 の特徴）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 4,
-                attn_ratio: int = 4, resolution: int = 7,
+    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 1,
+                attn_ratio: int = 3, resolution: int = 7,
                 act_layer=nn.ReLU, stride: int = None):
         super().__init__()
         self.num_heads = num_heads
@@ -210,11 +214,12 @@ class Attention4D(nn.Module):
         v_local = self.v_local(v)
         v = v.flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
 
-        ab = (self.ab if hasattr(self, 'ab') else self.attention_biases[:, self.attention_bias_idxs])
-        attn = (q @ k) * self.scale + ab.to(q.device)
-        attn = self.talking_head1(attn)
+        # ab = (self.ab if hasattr(self, 'ab') else self.attention_biases[:, self.attention_bias_idxs])
+        # attn = (q @ k) * self.scale + ab.to(q.device)
+        attn = (q @ k) * self.scale
+        # attn = self.talking_head1(attn)
         attn = attn.softmax(dim=-1)
-        attn = self.talking_head2(attn)
+        # attn = self.talking_head2(attn)
 
         out = (attn @ v).transpose(2, 3).reshape(B, self.dh, self.resolution, self.resolution)
         out = out + v_local
@@ -233,8 +238,8 @@ class Attention4DDownsample(nn.Module):
     Q は LGQuery (stride=2)、K/V は元解像度の x から生成
     talking_head なし（原本通り）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 4,
-                 attn_ratio: int = 4, resolution: int = 7,
+    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 1,
+                 attn_ratio: int = 3, resolution: int = 7,
                  out_dim: int = None, act_layer=nn.ReLU):
         super().__init__()
         self.num_heads   = num_heads
@@ -305,13 +310,12 @@ class Attention4DDownsample(nn.Module):
         v_local = self.v_local(v)
         v = v.flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
 
-        ab = (self.ab if hasattr(self, 'ab') else
-              self.attention_biases[:, self.attention_bias_idxs])
-        attn = (q @ k) * self.scale + ab.to(q.device)
+        # ab = (self.ab if hasattr(self, 'ab') else self.attention_biases[:, self.attention_bias_idxs])
+        # attn = (q @ k) * self.scale + ab.to(q.device)
+        attn = (q @ k) * self.scale
         attn = attn.softmax(dim=-1)
 
-        out = (attn @ v).transpose(2, 3).reshape(
-            B, self.dh, self.resolution2, self.resolution2)
+        out = (attn @ v).transpose(2, 3).reshape(B, self.dh, self.resolution2, self.resolution2)
         out = out + v_local
         out = self.proj(out)
         return out
@@ -338,20 +342,28 @@ class Embedding(nn.Module):
             ps = to_2tuple(patch_size)
             st = to_2tuple(stride)
             pd = to_2tuple(padding)
-            self.conv = nn.Conv2d(in_chs, out_chs, kernel_size=ps, stride=st, padding=pd)
-            self.bn   = norm_layer(out_chs) if norm_layer else nn.Identity()
+            # DS-Conv: DW + PW
+            self.conv_dw     = nn.Conv2d(in_chs, in_chs, kernel_size=ps, stride=st, padding=pd, groups=in_chs)
+            self.conv_bn_dw  = nn.BatchNorm2d(in_chs)
+            self.conv_act_dw = act_layer()
+            self.conv_pw     = nn.Conv2d(in_chs, out_chs, kernel_size=1)
+            self.bn          = norm_layer(out_chs) if norm_layer else nn.Identity()
         else:
             ps = to_2tuple(patch_size)
             st = to_2tuple(stride)
             pd = to_2tuple(padding)
-            self.proj = nn.Conv2d(in_chs, out_chs, kernel_size=ps, stride=st, padding=pd)
-            self.norm = norm_layer(out_chs) if norm_layer else nn.Identity()
+            # DS-Conv: DW + PW
+            self.proj_dw     = nn.Conv2d(in_chs, in_chs, kernel_size=ps, stride=st, padding=pd, groups=in_chs)
+            self.proj_bn_dw  = nn.BatchNorm2d(in_chs)
+            self.proj_act_dw = act_layer()
+            self.proj_pw     = nn.Conv2d(in_chs, out_chs, kernel_size=1)
+            self.norm        = norm_layer(out_chs) if norm_layer else nn.Identity()
 
     def forward(self, x):
         if self.asub:
-            return self.attn(x) + self.bn(self.conv(x))
+            return self.attn(x) + self.bn(self.conv_pw(self.conv_act_dw(self.conv_bn_dw(self.conv_dw(x)))))
         else:
-            return self.norm(self.proj(x))
+            return self.norm(self.proj_pw(self.proj_act_dw(self.proj_bn_dw(self.proj_dw(x)))))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -360,13 +372,14 @@ class FFN(nn.Module):
     FFN ブロック: x + drop_path(layer_scale * mlp(x))
     mid_conv=True の Mlp を使用
     """
-    def __init__(self, dim: int, mlp_ratio: float = 4., act_layer=nn.GELU,
+    def __init__(self, dim: int, mlp_ratio: float = 3., act_layer=nn.GELU,
                  drop: float = 0., drop_path: float = 0.,
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5):
         super().__init__()
-        self.mlp = Mlp(dim, hidden_features=int(dim * mlp_ratio),
-                       act_layer=act_layer, drop=drop, mid_conv=True)
+        
+        self.mlp       = Mlp(dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop, mid_conv=True)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        
         self.use_layer_scale = use_layer_scale
         if use_layer_scale:
             self.layer_scale_2 = nn.Parameter(
@@ -391,10 +404,8 @@ class AttnFFN(nn.Module):
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5,
                  resolution: int = 7, stride: int = None):
         super().__init__()
-        self.token_mixer = Attention4D(dim, resolution=resolution,
-                                       act_layer=act_layer, stride=stride)
-        self.mlp = Mlp(dim, hidden_features=int(dim * mlp_ratio),
-                       act_layer=act_layer, drop=drop, mid_conv=True)
+        self.token_mixer = Attention4D(dim, resolution=resolution, act_layer=act_layer, stride=stride)
+        self.mlp = Mlp(dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop, mid_conv=True)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.use_layer_scale = use_layer_scale
         if use_layer_scale:
