@@ -142,8 +142,7 @@ class Attention4D(nn.Module):
             nn.BatchNorm2d(self.num_heads * self.d),
         )
         self.v_local = nn.Sequential(
-            nn.Conv2d(self.num_heads * self.d, self.num_heads * self.d,
-                      kernel_size=3, stride=1, padding=1, groups=self.num_heads * self.d),
+            nn.Conv2d(self.num_heads * self.d, self.num_heads * self.d, kernel_size=3, stride=1, padding=1, groups=self.num_heads * self.d),
             nn.BatchNorm2d(self.num_heads * self.d),
         )
         self.talking_head1 = nn.Conv2d(self.num_heads, self.num_heads, 1)
