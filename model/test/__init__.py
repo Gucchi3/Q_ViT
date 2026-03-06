@@ -1,4 +1,4 @@
-from .test import test, test_cnn
+from .test import test
 from .module import (
     QuantAct,
     QuantLinear,
@@ -7,8 +7,8 @@ from .module import (
 )
 
 MODEL_MAP = {
-    "test":    test_cnn,
-    "testcnn": test_cnn,
+    "test":    test,
+    "testcnn": test,
 }
 
 
@@ -25,7 +25,6 @@ def get_model(name: str):
 
 __all__ = [
     "test",
-    "test_cnn",
     "get_model",
     "QuantAct",
     "QuantLinear",

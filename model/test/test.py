@@ -113,10 +113,16 @@ import pretty_errors
 #         return out
 
 class test(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 pretrained: bool = False,
+                 num_classes: int = 10,
+                 in_chans: int = 3,
+                 drop_rate: float = 0.0,
+                 drop_path_rate: float = 0.0,
+                 **kwargs):
         super(test, self).__init__()
 
-        self.conv0 = nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1)
+        self.conv0 = nn.Conv2d(in_chans, 32, kernel_size=3, stride=2, padding=1)
         self.bn0   = nn.BatchNorm2d(32)
         self.relu0 = nn.ReLU(inplace=True)
         
@@ -182,7 +188,7 @@ class test(nn.Module):
       
 
 
-        self.fc = nn.Linear(128*7*7, 10)  # 1x9
+        self.fc = nn.Linear(128*7*7, num_classes)
         #self.fc2 = nn.Linear(5*5*24, 8)
 
     def forward(self, x):
