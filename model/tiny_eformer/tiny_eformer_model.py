@@ -40,7 +40,7 @@ class Stem(nn.Module):
     stem: Conv3x3 BN ReLU x2 (stride=2 ずつ)
     入力 (B, in_chs, H, W) → 出力 (B, out_chs, H/4, W/4)
     """
-    def __init__(self, in_chs: int, out_chs: int, act_layer=nn.ReLU):
+    def __init__(self, in_chs: int, out_chs: int, act_layer=nn.ReLU6):
         super().__init__()
         mid = out_chs // 2
         # conv1: 通常 Conv
@@ -68,7 +68,7 @@ class Mlp(nn.Module):
     mid_conv=True のとき DW-Conv 3x3 の中間層が入る（AttnFFN/FFN で使用）
     """
     def __init__(self, in_features: int, hidden_features: int = None,
-                 out_features: int = None, act_layer=nn.GELU,
+                 out_features: int = None, act_layer=nn.ReLU6,
                  drop: float = 0., mid_conv: bool = False):
         super().__init__()
         out_features    = out_features    or in_features
@@ -210,6 +210,9 @@ class Attention4D(nn.Module):
         q = self.q(x).flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
         k = self.k(x).flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 2, 3)
         v = self.v(x)
+
+        q = F.normalize(q, p=1, dim=-1)
+        k = F.normalize(k, p=1, dim=-2)
         
         v_local = self.v_local(v)
         v = v.flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
@@ -218,7 +221,7 @@ class Attention4D(nn.Module):
         # attn = (q @ k) * self.scale + ab.to(q.device)
         attn = (q @ k) * self.scale
         # attn = self.talking_head1(attn)
-        attn = attn.softmax(dim=-1)
+        # attn = attn.softmax(dim=-1)
         # attn = self.talking_head2(attn)
 
         out = (attn @ v).transpose(2, 3).reshape(B, self.dh, self.resolution, self.resolution)
@@ -306,13 +309,17 @@ class Attention4DDownsample(nn.Module):
         q = self.q(x).flatten(2).reshape(B, self.num_heads, -1, self.N2).permute(0, 1, 3, 2)
         k = self.k(x).flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 2, 3)
         v = self.v(x)
+
+        q = F.normalize(q, p=1, dim=-1)
+        k = F.normalize(k, p=1, dim=-2)
+
         v_local = self.v_local(v)
         v = v.flatten(2).reshape(B, self.num_heads, -1, self.N).permute(0, 1, 3, 2)
 
         # ab = (self.ab if hasattr(self, 'ab') else self.attention_biases[:, self.attention_bias_idxs])
         # attn = (q @ k) * self.scale + ab.to(q.device)
         attn = (q @ k) * self.scale
-        attn = attn.softmax(dim=-1)
+        # attn = attn.softmax(dim=-1)
 
         out = (attn @ v).transpose(2, 3).reshape(B, self.dh, self.resolution2, self.resolution2)
         out = out + v_local
@@ -330,7 +337,7 @@ class Embedding(nn.Module):
     def __init__(self, in_chs: int, out_chs: int,
                  patch_size: int = 3, stride: int = 2, padding: int = 1,
                  asub: bool = False, resolution: int = None,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 act_layer=nn.ReLU6, norm_layer=nn.BatchNorm2d):
         super().__init__()
         self.asub = asub
 
@@ -371,7 +378,7 @@ class FFN(nn.Module):
     FFN ブロック: x + drop_path(layer_scale * mlp(x))
     mid_conv=True の Mlp を使用
     """
-    def __init__(self, dim: int, mlp_ratio: float = 3., act_layer=nn.GELU,
+    def __init__(self, dim: int, mlp_ratio: float = 3., act_layer=nn.ReLU6,
                  drop: float = 0., drop_path: float = 0.,
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5):
         super().__init__()
@@ -398,7 +405,7 @@ class AttnFFN(nn.Module):
     AttnFFN ブロック: token_mixer(Attention4D) + mlp(Mlp)
     x → attn残差(layer_scale_1) → mlp残差(layer_scale_2)
     """
-    def __init__(self, dim: int, mlp_ratio: float = 4., act_layer=nn.ReLU,
+    def __init__(self, dim: int, mlp_ratio: float = 4., act_layer=nn.ReLU6,
                  drop: float = 0., drop_path: float = 0.,
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5,
                  resolution: int = 7, stride: int = None):
