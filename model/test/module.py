@@ -114,7 +114,7 @@ class SymmetricQuantFunction(Function):
                 scale = scale.view(1, -1, 1, 1)
             else:
                 raise NotImplementedError
-        return grad_output.clone() / scale, None, None, None
+        return grad_output / scale, None, None, None
 
 
 # ── Ternary Quantization Function ─────────────────────────────────────────────
@@ -154,7 +154,7 @@ class TernaryQuantFunction(Function):
                 scale = scale.view(1, -1, 1, 1)
             else:
                 raise NotImplementedError
-        return grad_output.clone() / scale, None, None, None
+        return grad_output / scale, None, None, None
 
 
 # ── Floor Function (STE) ──────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ class floor_ste(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output.clone()
+        return grad_output
 
 
 # ── Round Function (STE) ──────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ class round_ste(Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output.clone()
+        return grad_output
 
 
 # ── Batch Frexp ───────────────────────────────────────────────────────────────
@@ -196,17 +196,17 @@ def batch_frexp(inputs, max_bit=31):
     device = inputs.device
     inputs = inputs.view(-1)
 
-    output_m, output_e = np.frexp(inputs.cpu().numpy())
-    tmp_m = []
-    for m in output_m:
-        int_m_shifted = int(Decimal(m * (2 ** max_bit)).quantize(Decimal('1'),
-                                                                  rounding=decimal.ROUND_HALF_UP))
-        tmp_m.append(int_m_shifted)
-    output_m = np.array(tmp_m)
-    output_e = float(max_bit) - output_e
+    output_m, output_e = torch.frexp(inputs)
+    output_m = output_m * float(1 << max_bit)
+    output_m = torch.where(
+        output_m >= 0,
+        torch.floor(output_m + 0.5),
+        torch.ceil(output_m - 0.5)
+    ).to(torch.int64)
+    output_e = (float(max_bit) - output_e).to(torch.float64)
 
-    return torch.from_numpy(output_m).to(device).view(shape_of_input), \
-           torch.from_numpy(output_e).to(device).view(shape_of_input)
+    return output_m.to(device).view(shape_of_input), \
+           output_e.to(device).view(shape_of_input)
 
 
 # ── Fixed-point Multiply ──────────────────────────────────────────────────────
@@ -287,8 +287,8 @@ class fixedpoint_mul(Function):
     def backward(ctx, grad_output):
         identity_grad = None
         if ctx.identity is not None:
-            identity_grad = grad_output.clone() / ctx.z_scaling_factor
-        return grad_output.clone() / ctx.z_scaling_factor, None, None, None, None, \
+            identity_grad = grad_output / ctx.z_scaling_factor
+        return grad_output / ctx.z_scaling_factor, None, None, None, None, \
                identity_grad, None
 
 
@@ -545,13 +545,8 @@ class QuantAct(nn.Module):
         with torch.no_grad():
             x_act = x if identity is None else identity + x
             if self.running_stat:
-                if len(x_act.shape) == 4:
-                    x_act = x_act.permute(0, 2, 3, 1)
-                v = x_act.reshape(-1, x_act.shape[-1])
-                v = v.transpose(0, 1)
-
-                cur_min = v.min(axis=1).values
-                cur_max = v.max(axis=1).values
+                cur_min = x_act.min()
+                cur_max = x_act.max()
                 if torch.eq(self.min_val, self.max_val).all():
                     self.min_val = cur_min
                     self.max_val = cur_max
@@ -560,8 +555,6 @@ class QuantAct(nn.Module):
                                    cur_min * (1 - self.act_range_momentum)
                     self.max_val = self.max_val * self.act_range_momentum + \
                                    cur_max * (1 - self.act_range_momentum)
-                self.max_val = self.max_val.max()
-                self.min_val = self.min_val.min()
 
             self.act_scaling_factor = symmetric_linear_quantization_params(
                 self.activation_bit, self.min_val, self.max_val)
