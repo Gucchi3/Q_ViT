@@ -131,7 +131,7 @@ class Attention4D(nn.Module):
     stride 設定時: x 全体を stride_conv で縮小後に Q/K/V を生成し、最後に upsample
     talking_head1/2 あり（V2 の特徴）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 1,
+    def __init__(self, dim: int = 384, key_dim: int = 96, num_heads: int = 1,
                 attn_ratio: int = 3, resolution: int = 7,
                 act_layer=nn.ReLU, stride: int = None):
         super().__init__()
@@ -238,7 +238,7 @@ class Attention4DDownsample(nn.Module):
     Q は LGQuery (stride=2)、K/V は元解像度の x から生成
     talking_head なし（原本通り）
     """
-    def __init__(self, dim: int = 384, key_dim: int = 32, num_heads: int = 1,
+    def __init__(self, dim: int = 384, key_dim: int = 96, num_heads: int = 1,
                  attn_ratio: int = 3, resolution: int = 7,
                  out_dim: int = None, act_layer=nn.ReLU):
         super().__init__()
@@ -290,8 +290,7 @@ class Attention4DDownsample(nn.Module):
                     attention_offsets[off] = len(attention_offsets)
                 idxs.append(attention_offsets[off])
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs',
-                             torch.LongTensor(idxs).view(self.N2, self.N))
+        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(self.N2, self.N))
 
     @torch.no_grad()
     def train(self, mode=True):
