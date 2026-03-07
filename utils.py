@@ -158,6 +158,10 @@ class tools:
                 "num_heads":  config.get("DEIT_CUS_NUM_HEADS",    3),
                 "mlp_ratio":  config.get("DEIT_CUS_MLP_RATIO",    4.0),
             }
+        elif model_name == "tiny_eformer":
+            extra_kwargs = {
+                "img_size": config.get("IMG_SIZE", 224),
+            }
 
         model = get_model(model_name)(
             pretrained     = config["PRETRAINED"],
