@@ -405,7 +405,7 @@ class AttnFFN(nn.Module):
     AttnFFN ブロック: token_mixer(Attention4D) + mlp(Mlp)
     x → attn残差(layer_scale_1) → mlp残差(layer_scale_2)
     """
-    def __init__(self, dim: int, mlp_ratio: float = 4., act_layer=nn.ReLU6,
+    def __init__(self, dim: int, mlp_ratio: float = 3., act_layer=nn.ReLU6,
                  drop: float = 0., drop_path: float = 0.,
                  use_layer_scale: bool = True, layer_scale_init_value: float = 1e-5,
                  resolution: int = 7, stride: int = None):
@@ -447,39 +447,43 @@ class TinyEFormer(nn.Module):
         nn.BatchNorm2d, nn.Linear 等 (通常の PyTorch モジュール)
     """
 
-    def __init__(self, num_classes: int = 10, **kwargs):
+    def __init__(self, num_classes: int = 10, img_size: int = 224, **kwargs):
         super().__init__()
-        # 1. Stem: 3 → 16, 224 → 56
+        stage3_resolution = math.ceil(img_size / 16)
+        stage4_resolution = math.ceil(img_size / 32)
+
+        # 1. Stem: 3 → 16, img_size → ceil(img_size / 4)
         self.stem = Stem(in_chs=3, out_chs=16)
-        # 2. FFN: dim=16, res=56
-        self.ffn1 = FFN(dim=16)
-        # 3. Embedding (asub=False): 16 → 32, 56 → 28
+        # 2. FFN: dim=16
+        self.ffn1 = FFN(dim=16, mlp_ratio=3)
+        # 3. Embedding (asub=False): 16 → 32
         self.emb1 = Embedding(in_chs=16, out_chs=32, asub=False)
-        # 4. FFN: dim=32, res=28
+        # 4. FFN: dim=32
         self.ffn2 = FFN(dim=32)
-        # 5. Embedding (asub=False): 32 → 48, 28 → 14
+        # 5. Embedding (asub=False): 32 → 48
         self.emb2 = Embedding(in_chs=32, out_chs=48, asub=False)
-        # 6. AttnFFN (stride=2, 内部ダウンサンプル後アップサンプル): dim=48, res=14→14
-        self.attn4d_s = AttnFFN(dim=48, resolution=14, stride=2)
+        # 6. AttnFFN (stride=2, 内部ダウンサンプル後アップサンプル)
+        self.attn4d_s = AttnFFN(dim=48, resolution=stage3_resolution, stride=2)
         # self.attn4d_s = FFN(dim=48)
-        # 7. Embedding (asub=True): 48 → 64, 14 → 7
-        self.attn4d_ds = Embedding(in_chs=48, out_chs=64, asub=True, resolution=14)
+        # 7. Embedding (asub=True): 48 → 64
+        self.attn4d_ds = Embedding(
+            in_chs=48, out_chs=64, asub=True, resolution=stage3_resolution)
         # self.attn4d_ds = Embedding(in_chs=48, out_chs=64, asub=False)
-        # 8. AttnFFN: dim=64, res=7
-        self.attn4d = AttnFFN(dim=64, resolution=7)
+        # 8. AttnFFN: dim=64, res=ceil(img_size / 32)
+        self.attn4d = AttnFFN(dim=64, resolution=stage4_resolution)
         # Head
         self.norm = nn.BatchNorm2d(64)
         self.head = nn.Linear(64, num_classes)
 
     def forward(self, x):
-        x = self.stem(x)         # (B, 16, 56, 56)
-        x = self.ffn1(x)         # (B, 16, 56, 56)
-        x = self.emb1(x)         # (B, 32, 28, 28)
-        x = self.ffn2(x)         # (B, 32, 28, 28)
-        x = self.emb2(x)         # (B, 48, 14, 14)
-        x = self.attn4d_s(x)     # (B, 48, 14, 14)
-        x = self.attn4d_ds(x)    # (B, 64,  7,  7)
-        x = self.attn4d(x)       # (B, 64,  7,  7)
+        x = self.stem(x)
+        x = self.ffn1(x)
+        x = self.emb1(x)
+        x = self.ffn2(x)
+        x = self.emb2(x)
+        x = self.attn4d_s(x)
+        x = self.attn4d_ds(x)
+        x = self.attn4d(x)
         x = self.norm(x)
         x = x.mean(dim=[2, 3])   # GlobalAvgPool → (B, 64)
         x = self.head(x)         # (B, num_classes)
@@ -499,5 +503,6 @@ def tiny_eformer(pretrained: bool = False, num_classes: int = 10, **kwargs):
 if __name__ == "__main__":
     from torchinfo import summary
 
-    model = TinyEFormer(num_classes=10)
-    summary(model, input_size=(1, 3, 224, 224))
+    input_size = 160
+    model = TinyEFormer(num_classes=10, img_size=input_size)
+    summary(model, input_size=(1, 3, input_size, input_size))
